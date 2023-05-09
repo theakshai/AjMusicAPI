@@ -13,13 +13,11 @@ namespace AjMusicApi.Models
         [Column("name")]
         public string? Name { get; set; }
         [Column("following")]
-        public int? following { get; set; }
+        public int? Following { get; set; }
         [Column("dob")]
         public DateTime? Dob { get; set; }
         [Column("country")]
         public string? Country { get; set; }
-        [Column("img_id")]
-        public string? ImgId { get; set; }
         [Column("created_on")]
         public DateTime? CreatedOn { get; set; }
     }

@@ -3,10 +3,14 @@ using AjMusicApi.Data;
 using AjMusicApi.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NuGet.Protocol;
+using NuGet.Versioning;
+using RestSharp;
+using System.Formats.Asn1;
 using System.Linq.Expressions;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -96,9 +100,21 @@ namespace AjMusicApi.Controllers.Admin
             }
             return NotFound();
         }
+        [HttpGet]
+        [Route("ajfy/getallplaylists")]
+
+        public async Task<IActionResult> GetAllPlaylist()
+        {
+            if (_acontext != null)
+            {
+                var AllPlayList = await _acontext.PlayList.ToListAsync();
+                return Ok(AllPlayList);
+            }
+            return NotFound();
+        }
 
         [HttpGet]
-        [Route("ajfy/admin/getalltracks")]
+        [Route("ajfy/getalltracks")]
 
         public async Task<IActionResult> GetAllTracks()
         {
@@ -129,7 +145,7 @@ namespace AjMusicApi.Controllers.Admin
 
         public async Task<IActionResult> GetTrackById(string? track_id)
         {
-            if (_acontext != null)
+            if (_acontext != null && track_id != null)
             {
                 var result = from artist in _acontext?.Artists
                              join track in _acontext!.Tracks on artist.Id equals track.ArtistId
@@ -207,26 +223,57 @@ namespace AjMusicApi.Controllers.Admin
                         }
                         catch (Exception e)
                         {
-                            return BadRequest(e.Message);
+                            Console.WriteLine(e.Message);
                         }
                 }
                 else
                 {
-                return BadRequest("Track is already Present");
+                    return new ObjectResult(new { message = "Track Already Exist" }) { StatusCode = 400 };
                 }
             return Ok();
 
         }
 
         [HttpPost]
+        [Route("ajfy/createnewplaylist")]
+        public async Task<IActionResult> AddNewPlaylist([FromBody] string playlistname)
+        {
+            if(playlistname == null)
+            {
+                return BadRequest();
+            }
+            var id = Guid.NewGuid().ToString();
+            var Playlist = new PlayList
+            {
+                Id = id,
+                Name = playlistname,
+            };
+            _acontext?.PlayList.AddAsync(Playlist);
+            await _acontext?.SaveChangesAsync();
+            return Ok();
+
+
+        } 
+
+        [HttpPost]
         [Route("ajfy/user/addnewuser")]
         public async Task<IActionResult> AddNewUser([FromBody] dynamic user)
         {
 
-            if (user != null)
+            var CookieOptions = new CookieOptions
             {
-                var _UserId = Guid.NewGuid().ToString() ;
-                var Auth = new Auth
+                Expires = DateTime.Now.AddDays(7),
+                IsEssential = true,
+            };
+            var _UserId = Guid.NewGuid().ToString();
+
+            HttpContext.Response.Cookies.Append("cookieName", "cookieValue", new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Strict
+            });
+            var Auth = new Auth
                 {
                     UserId = _UserId,
                     Email = user?.GetProperty("email").GetString(),
@@ -238,27 +285,81 @@ namespace AjMusicApi.Controllers.Admin
                 {
                     UserId = _UserId,
                     Name = user?.GetProperty("name").GetString(),
-                    Dob = user?.GetProperty("dob").GetString(),
+                    Dob = DateTime.Parse(user?.GetProperty("dob").GetString()),
+                    Following = 1,
                     Country = user?.GetProperty("country").GetString(),
                     CreatedOn = DateTime.Now,
                 };
-
                 try
                 {
                     _acontext?.Auth.AddAsync(Auth);
-                    _acontext?.SaveChangesAsync();
                     _acontext?.Users.AddAsync(User);
-                    _acontext?.SaveChangesAsync();
+                    await _acontext?.SaveChangesAsync();
+
 
                     return new ObjectResult(new { message = "User Created Successfully" }) { StatusCode = 201 };
 
-                }catch(Exception e)
-                {
-                return new ObjectResult(new { message = "Unable to create User" }) { StatusCode = 422 };
                 }
-            }
+                catch (Exception e)
+                {
                     return new ObjectResult(new { message = "Unable to create User" }) { StatusCode = 422 };
+                }
+
         }
+
+        [HttpGet]
+        [Route("ajfy/searchsong")]
+
+        public async Task<IActionResult> SearchSong(string? query)
+        {
+            if(query == null || _acontext == null)
+            {
+                return NotFound("No SongName");
+            }
+            else
+            {
+                var song = _acontext?.Tracks.Where(t => t.Title!.Contains(query)  );
+                if(song == null)
+                {
+                    return NotFound();
+                }
+            return Ok(await song!.ToListAsync());
+            }
+        }
+
+        [HttpDelete]
+        [Route("ajfy/admin/deletesongbyid")]
+
+        public async Task<IActionResult> DeleteByArtist(string? id)
+        {
+            if(id == null)
+            {
+                return NotFound();
+            }
+                var songToDelete = _acontext.Tracks.Where(t => t.TrackId == id);
+                if(songToDelete == null)
+                {
+                    return NotFound();
+                }
+                 _acontext.Tracks.RemoveRange(songToDelete);
+                await _acontext.SaveChangesAsync();
+                return Ok();
+
+        }
+
+        [HttpGet]
+        [Route("ajfy/admin/getartistbyid")]
+
+        public async Task<IActionResult> GetArtistById(string? id)
+        {
+            if(id == null)
+            {
+                return NotFound();
+            }
+            var artist = await _acontext.Artists.FindAsync(id);
+            return Ok(artist);
+        }
+
         }
     }
 

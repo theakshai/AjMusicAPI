@@ -12,5 +12,7 @@ namespace AjMusicApi.Data
         public DbSet<Users> Users { get; set; }
         public DbSet<Auth> Auth { get; set; }
 
+        public DbSet<PlayList> PlayList { get; set; }
+
     }
 }
